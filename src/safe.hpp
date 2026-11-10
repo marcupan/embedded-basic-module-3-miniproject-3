@@ -1,5 +1,5 @@
 // Машина станів сейфа. Без заліза: приймає клаци й натискання, повертає подію.
-// main.cpp вирішує, що з подією робити (консоль, серво, зумер).
+// main.cpp вирішує, що з подією робити (консоль, серво, зумер, екран).
 #pragma once
 #include <stdint.h>
 
@@ -12,7 +12,9 @@ public:
 
     enum class Event : uint8_t { None, DigitStarted, DigitChanged, Granted, Denied, Reset, Lockout, Relocked };
 
-    Safe(const uint8_t *code, const uint8_t length) : code_(code), length_(length) {
+    // Код довший за MAX_DIGITS обрізаємо, інакше entered_ переповниться
+    Safe(const uint8_t *code, const uint8_t length)
+        : code_(code), length_(length <= MAX_DIGITS ? length : MAX_DIGITS) {
     }
 
     // direction: +1 або −1, один клац енкодера
@@ -54,16 +56,21 @@ public:
         // Нічого не набрано: скидати нічого, спробу не витрачаємо
         if (done_ == 0 && lastDirection_ == 0) return Event::None;
 
+        // Почав набирати і натиснув: це скидання, і воно витрачає спробу,
+        // інакше кнопкою можна було б перебирати код без обмежень
         clearEntry();
         return spendAttempt(Event::Reset);
     }
 
-    Phase phase() const { return phase_; }
-    uint8_t currentDigit() const { return current_; }
-    uint8_t digitsDone() const { return done_; }
-    uint8_t digitAt(const uint8_t index) const { return entered_[index]; }
-    bool digitInProgress() const { return lastDirection_ != 0; }
+    // Гетери для екрана й консолі
+    Phase phase() const { return phase_; }              // вводимо / відкрито / заблоковано
+    uint8_t currentDigit() const { return current_; }   // цифра, яку зараз крутимо
+    uint8_t digitsDone() const { return done_; }        // скільки цифр уже підтверджено
+    bool digitInProgress() const { return lastDirection_ != 0; } // чи почали крутити поточну цифру
     uint8_t attemptsLeft() const { return attemptsLeft_; }
+
+    // Підтверджена цифра за номером. Номер поза набраними → 0, без читання за межами масиву
+    uint8_t digitAt(const uint8_t index) const { return index < done_ ? entered_[index] : 0; }
 
 private:
     Event check() {
